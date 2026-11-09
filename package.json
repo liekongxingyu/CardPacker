@@ -1,0 +1,14 @@
+{
+  "name": "card-packer-pro",
+  "version": "1.0.0",
+  "description": "SillyTavern V3 角色卡工程打包器 Pro — React + Node.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others --prefix-colors \"cyan,magenta\" --names \"SERVER,CLIENT\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

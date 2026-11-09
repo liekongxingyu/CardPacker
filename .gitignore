@@ -1,0 +1,93 @@
+# ==========================================
+# 依赖目录 (Dependencies)
+# ==========================================
+node_modules/
+*/node_modules/
+
+# ==========================================
+# 构建产物 (Production / Build Outputs)
+# ==========================================
+dist/
+client/dist/
+server/dist/
+build/
+out/
+*.tsbuildinfo
+
+# ==========================================
+# 缓存与构建工具缓存 (Cache & Tooling)
+# ==========================================
+.cache/
+.vite/
+client/.vite/
+.eslintcache
+*.tmp
+*.temp
+
+# ==========================================
+# 日志文件 (Logs)
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# 环境配置与本地个人配置 (Env & Local Settings)
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.env
+# 个人工作区路径持久化文件（包含本机绝对路径）
+user_settings.json
+server/user_settings.json
+
+# ==========================================
+# 本地业务快照与导出产物 (Snapshots & Exports)
+# 默认保留 server/snapshots/ 目录，忽略生成的快照 json
+# （如需同步快照配置，可将此条规则注释掉）
+# ==========================================
+server/snapshots/*.json
+!server/snapshots/.gitkeep
+export/
+output/
+
+# ==========================================
+# 编辑器与 IDE 配置 (IDEs & Editors)
+# ==========================================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==========================================
+# 操作系统生成文件 (OS Generated Files)
+# ==========================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+
