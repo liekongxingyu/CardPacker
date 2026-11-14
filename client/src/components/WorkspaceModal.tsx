@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import type { AppMode } from '../types';
 
 interface WorkspaceModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface WorkspaceModalProps {
   defaultPath: string;
   onWorkspaceChanged: (newPath: string, newProjects: string[]) => void;
   onNotify: (kind: 'success' | 'error', message: string) => void;
+  mode?: AppMode;
 }
 
 export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
@@ -17,11 +19,15 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   defaultPath,
   onWorkspaceChanged,
   onNotify,
+  mode = 'character',
 }) => {
   const [inputPath, setInputPath] = useState(currentPath);
   const [submitting, setSubmitting] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const isWorldbook = mode === 'worldbook';
+  const itemNoun = isWorldbook ? '世界书' : '角色卡';
 
   useEffect(() => {
     if (isOpen) {
@@ -36,7 +42,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     setBrowsing(true);
     setLocalError(null);
     try {
-      const res = await api.browseWorkspace();
+      const res = await api.browseWorkspace(mode);
       if (res.success && res.data) {
         if (!res.data.canceled && res.data.selectedPath) {
           setInputPath(res.data.selectedPath);
@@ -66,15 +72,21 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     setSubmitting(true);
     setLocalError(null);
 
-    const res = await api.setWorkspace(inputPath.trim());
+    const res = await api.setWorkspace(inputPath.trim(), mode);
     setSubmitting(false);
 
     if (res.success && res.data) {
-      onWorkspaceChanged(res.data.workspaceRoot, res.data.projects);
-      onNotify('success', `扫描文件夹已切换！发现 ${res.data.projects.length} 个工程`);
+      const activeRoot = isWorldbook
+        ? res.data.worldbookWorkspaceRoot
+        : res.data.workspaceRoot;
+      onWorkspaceChanged(activeRoot, res.data.projects);
+      onNotify(
+        'success',
+        `${itemNoun}扫描路径已切换！发现 ${res.data.projects.length} 个${itemNoun}工程`
+      );
       onClose();
     } else {
-      setLocalError(res.error ?? '切换扫描文件夹失败');
+      setLocalError(res.error ?? `切换${itemNoun}扫描路径失败`);
     }
   };
 
@@ -87,19 +99,19 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/80">
           <div className="flex items-center gap-2.5">
-            <span className="text-xl">📁</span>
+            <span className="text-xl">{isWorldbook ? '📖' : '📁'}</span>
             <div>
               <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                更改角色卡扫描文件夹
+                更改{itemNoun}扫描文件夹
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                程序将扫描此目录下的子文件夹作为可用工程
+                程序将扫描此目录下的每个子文件夹作为独立{itemNoun}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
           >
             ✕
           </button>
@@ -119,8 +131,16 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   setInputPath(e.target.value);
                   setLocalError(null);
                 }}
-                placeholder="例如: D:\Cards 或 D:\BaiduSyncdisk\文件\个人\世界书"
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl text-sm font-mono text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                placeholder={
+                  isWorldbook
+                    ? '例如: D:\\Worldbooks 或 D:\\BaiduSyncdisk\\文件\\个人\\世界书'
+                    : '例如: D:\\Cards 或 D:\\BaiduSyncdisk\\文件\\个人\\世界书'
+                }
+                className={`w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl text-sm font-mono text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none transition-all ${
+                  isWorldbook
+                    ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500'
+                    : 'focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500'
+                }`}
                 autoFocus
               />
             </div>
@@ -168,7 +188,11 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
             <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-500 dark:text-slate-400">
               <li>默认初始路径为：<code className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">{defaultPath}</code></li>
               <li>切换后配置将自动持久化，下次启动程序依然有效。</li>
-              <li>系统将自动排除 <code className="font-mono">.git</code>, <code className="font-mono">node_modules</code> 等非工程目录。</li>
+              <li>
+                {isWorldbook
+                  ? '世界书模式下，将递归扫描子目录下的 .json, .yaml, .yml, .xml, .txt 等条目文件。'
+                  : '角色卡模式下，将递归扫描子目录下的 .json 文件。'}
+              </li>
             </ul>
           </div>
 
@@ -178,14 +202,18 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 shadow-md shadow-violet-500/20 transition-all cursor-pointer"
+              className={`inline-flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 shadow-md transition-all cursor-pointer ${
+                isWorldbook
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                  : 'bg-violet-600 hover:bg-violet-700 shadow-violet-500/20'
+              }`}
             >
               {submitting ? (
                 <>

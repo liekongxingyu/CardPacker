@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import projectsRouter from './routes/projects';
+import worldbooksRouter from './routes/worldbooks';
 import configRouter from './routes/config';
 
 const app = express();
@@ -18,6 +19,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // ── 路由 ────────────────────────────────────────────────
 app.use('/api/projects', projectsRouter);
+app.use('/api/worldbooks', worldbooksRouter);
 app.use('/api/config', configRouter);
 
 // ── 健康检查 ─────────────────────────────────────────────

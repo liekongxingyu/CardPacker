@@ -1,0 +1,91 @@
+{
+  "projectName": "AV演绎",
+  "lastUpdated": "2026-11-13T10:22:02Z",
+  "meta": {
+    "name": "AV演绎",
+    "description": "",
+    "scanDepth": 100,
+    "tokenBudget": 2048,
+    "recursiveScanning": true
+  },
+  "entries": {
+    "00_玩法介绍.xml": {
+      "triggerKey": "玩法介绍",
+      "lightType": "constant",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T01_女同.xml": {
+      "triggerKey": "t1",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T02_痴女·姐系.xml": {
+      "triggerKey": "t2",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T03_前戏·过程系.xml": {
+      "triggerKey": "t3",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T04_制服·情境装扮.xml": {
+      "triggerKey": "t4",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T05_多人群像.xml": {
+      "triggerKey": "t5",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T06_主仆·SM.xml": {
+      "triggerKey": "t6",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T07_露出·半公开.xml": {
+      "triggerKey": "t7",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T08_独演.xml": {
+      "triggerKey": "t8",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T09_男优特化.xml": {
+      "triggerKey": "t9",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T10_素人·纪实.xml": {
+      "triggerKey": "t10",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T11_体型特化.xml": {
+      "triggerKey": "t11",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    },
+    "T12_口·手技法特化.xml": {
+      "triggerKey": "t12",
+      "lightType": "selective",
+      "position": "before_char",
+      "enabled": true
+    }
+  }
+}

@@ -6,34 +6,47 @@ import {
   setWorkspaceRoot,
   resetWorkspaceRoot,
   DEFAULT_WORKSPACE_ROOT,
+  DEFAULT_WORLDBOOK_WORKSPACE_ROOT,
 } from '../config';
 import { getCandidateProjects } from '../services/scanner';
-import { ApiResponse } from '../types';
+import { ApiResponse, AppMode } from '../types';
 
 const router = Router();
 
 export interface ConfigData {
   workspaceRoot: string;
   defaultWorkspaceRoot: string;
+  worldbookWorkspaceRoot: string;
+  defaultWorldbookWorkspaceRoot: string;
   exists: boolean;
   projects: string[];
 }
 
+function parseMode(req: Request): AppMode {
+  const mode = (req.query.mode || req.body?.mode) as string | undefined;
+  return mode === 'worldbook' ? 'worldbook' : 'character';
+}
+
 /**
  * GET /api/config
- * 返回当前工作区路径配置及工程列表
+ * 返回当前工作区路径配置及工程列表，支持通过 ?mode=worldbook 或 ?mode=character 查询
  */
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', (req: Request, res: Response) => {
   try {
-    const root = getWorkspaceRoot();
-    const exists = fs.existsSync(root);
-    const projects = exists ? getCandidateProjects() : [];
+    const mode = parseMode(req);
+    const charRoot = getWorkspaceRoot('character');
+    const wbRoot = getWorkspaceRoot('worldbook');
+    const activeRoot = getWorkspaceRoot(mode);
+    const exists = fs.existsSync(activeRoot);
+    const projects = exists ? getCandidateProjects(mode) : [];
 
     const response: ApiResponse<ConfigData> = {
       success: true,
       data: {
-        workspaceRoot: root,
+        workspaceRoot: charRoot,
         defaultWorkspaceRoot: DEFAULT_WORKSPACE_ROOT,
+        worldbookWorkspaceRoot: wbRoot,
+        defaultWorldbookWorkspaceRoot: DEFAULT_WORLDBOOK_WORKSPACE_ROOT,
         exists,
         projects,
       },
@@ -48,11 +61,12 @@ router.get('/', (_req: Request, res: Response) => {
 
 /**
  * POST /api/config/workspace
- * 切换扫描根目录
+ * 切换扫描根目录（支持指定 mode）
  */
 router.post('/workspace', (req: Request, res: Response) => {
   try {
-    const { path: newPath } = req.body as { path?: string };
+    const { path: newPath, mode: rawMode } = req.body as { path?: string; mode?: AppMode };
+    const mode: AppMode = rawMode === 'worldbook' ? 'worldbook' : 'character';
 
     if (!newPath || typeof newPath !== 'string' || !newPath.trim()) {
       return res.status(400).json({
@@ -78,14 +92,16 @@ router.post('/workspace', (req: Request, res: Response) => {
       });
     }
 
-    setWorkspaceRoot(trimmedPath);
-    const projects = getCandidateProjects();
+    setWorkspaceRoot(trimmedPath, mode);
+    const projects = getCandidateProjects(mode);
 
     const response: ApiResponse<ConfigData> = {
       success: true,
       data: {
-        workspaceRoot: trimmedPath,
+        workspaceRoot: getWorkspaceRoot('character'),
         defaultWorkspaceRoot: DEFAULT_WORKSPACE_ROOT,
+        worldbookWorkspaceRoot: getWorkspaceRoot('worldbook'),
+        defaultWorldbookWorkspaceRoot: DEFAULT_WORLDBOOK_WORKSPACE_ROOT,
         exists: true,
         projects,
       },
@@ -101,17 +117,21 @@ router.post('/workspace', (req: Request, res: Response) => {
  * POST /api/config/reset-workspace
  * 重置回默认工作区根目录
  */
-router.post('/reset-workspace', (_req: Request, res: Response) => {
+router.post('/reset-workspace', (req: Request, res: Response) => {
   try {
-    const defaultRoot = resetWorkspaceRoot();
-    const exists = fs.existsSync(defaultRoot);
-    const projects = exists ? getCandidateProjects() : [];
+    const mode = parseMode(req);
+    resetWorkspaceRoot(mode);
+    const activeRoot = getWorkspaceRoot(mode);
+    const exists = fs.existsSync(activeRoot);
+    const projects = exists ? getCandidateProjects(mode) : [];
 
     const response: ApiResponse<ConfigData> = {
       success: true,
       data: {
-        workspaceRoot: defaultRoot,
+        workspaceRoot: getWorkspaceRoot('character'),
         defaultWorkspaceRoot: DEFAULT_WORKSPACE_ROOT,
+        worldbookWorkspaceRoot: getWorkspaceRoot('worldbook'),
+        defaultWorldbookWorkspaceRoot: DEFAULT_WORLDBOOK_WORKSPACE_ROOT,
         exists,
         projects,
       },
@@ -127,7 +147,7 @@ router.post('/reset-workspace', (_req: Request, res: Response) => {
  * POST /api/config/browse
  * 唤起系统文件夹选择器（支持 Windows）
  */
-router.post('/browse', (_req: Request, res: Response) => {
+router.post('/browse', (req: Request, res: Response) => {
   if (process.platform !== 'win32') {
     return res.status(400).json({
       success: false,
@@ -135,14 +155,17 @@ router.post('/browse', (_req: Request, res: Response) => {
     });
   }
 
-  const initialPath = fs.existsSync(getWorkspaceRoot()) ? getWorkspaceRoot() : '';
+  const mode = parseMode(req);
+  const currentRoot = getWorkspaceRoot(mode);
+  const initialPath = fs.existsSync(currentRoot) ? currentRoot : '';
+  const desc = mode === 'worldbook' ? '请选择世界书工程扫描根目录' : '请选择角色卡工程扫描根目录';
 
   const psScript = `
 $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = '请选择角色卡工程扫描根目录'
+$dialog.Description = '${desc}'
 $dialog.ShowNewFolderButton = $true
 if ('${initialPath.replace(/'/g, "''")}' -ne '') {
     $dialog.SelectedPath = '${initialPath.replace(/'/g, "''")}'

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { AppMode } from '../types';
 
 interface ActionBarProps {
   totalEntries: number;
@@ -7,6 +8,7 @@ interface ActionBarProps {
   onExport: () => void;
   saving: boolean;
   exporting: boolean;
+  mode?: AppMode;
 }
 
 const ActionBar: React.FC<ActionBarProps> = ({
@@ -16,7 +18,10 @@ const ActionBar: React.FC<ActionBarProps> = ({
   onExport,
   saving,
   exporting,
+  mode = 'character',
 }) => {
+  const isWorldbook = mode === 'worldbook';
+
   return (
     <div className="sticky bottom-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 shadow-lg transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -29,7 +34,15 @@ const ActionBar: React.FC<ActionBarProps> = ({
           <span className="w-px h-3.5 bg-slate-200 dark:bg-slate-700" />
           <span>
             已就绪条目{' '}
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">{enabledEntries}</span>
+            <span
+              className={`font-bold ${
+                isWorldbook
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-violet-600 dark:text-violet-400'
+              }`}
+            >
+              {enabledEntries}
+            </span>
           </span>
         </div>
 
@@ -63,11 +76,13 @@ const ActionBar: React.FC<ActionBarProps> = ({
           <button
             onClick={onExport}
             disabled={exporting}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold
-                       bg-violet-600 hover:bg-violet-700 text-white
+            className={`inline-flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white
                        disabled:opacity-50 disabled:cursor-not-allowed
-                       shadow-md shadow-violet-500/25
-                       transition-all cursor-pointer"
+                       shadow-md transition-all cursor-pointer ${
+                         isWorldbook
+                           ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
+                           : 'bg-violet-600 hover:bg-violet-700 shadow-violet-500/25'
+                       }`}
           >
             {exporting ? (
               <>
@@ -80,7 +95,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
             ) : (
               <>
                 <span>🚀</span>
-                <span>导出 V3 卡片</span>
+                <span>{isWorldbook ? '导出世界书' : '导出 V3 卡片'}</span>
               </>
             )}
           </button>

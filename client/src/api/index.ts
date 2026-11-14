@@ -1,9 +1,13 @@
 import type {
   ApiResponse,
   ProjectDetail,
+  WorldbookDetail,
   SaveSnapshotRequest,
   ExportCardRequest,
+  SaveWorldbookRequest,
+  ExportWorldbookRequest,
   ConfigData,
+  AppMode,
 } from '../types';
 
 const BASE_URL = '';
@@ -26,7 +30,6 @@ async function request<T>(
 
 /**
  * 触发浏览器文件下载（另存为对话框）
- * 返回 true 表示成功，false 表示请求失败
  */
 async function downloadFile(
   url: string,
@@ -50,7 +53,7 @@ async function downloadFile(
       ? decodeURIComponent(utf8Match[1])
       : plainMatch
       ? plainMatch[1]
-      : 'card.json';
+      : 'export.json';
 
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
@@ -70,6 +73,7 @@ async function downloadFile(
 }
 
 export const api = {
+  // ── 角色卡 API ───────────────────────────────────────────
   getProjects(): Promise<ApiResponse<string[]>> {
     return request<string[]>('/api/projects');
   },
@@ -98,26 +102,58 @@ export const api = {
     );
   },
 
-  getConfig(): Promise<ApiResponse<ConfigData>> {
-    return request<ConfigData>('/api/config');
+  // ── 世界书 API ───────────────────────────────────────────
+  getWorldbooks(): Promise<ApiResponse<string[]>> {
+    return request<string[]>('/api/worldbooks');
   },
 
-  setWorkspace(path: string): Promise<ApiResponse<ConfigData>> {
+  getWorldbook(name: string): Promise<ApiResponse<WorldbookDetail>> {
+    return request<WorldbookDetail>(`/api/worldbooks/${encodeURIComponent(name)}`);
+  },
+
+  saveWorldbook(
+    name: string,
+    body: SaveWorldbookRequest
+  ): Promise<ApiResponse<{ savedAt: string }>> {
+    return request<{ savedAt: string }>(
+      `/api/worldbooks/${encodeURIComponent(name)}/save`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+  },
+
+  exportWorldbook(
+    name: string,
+    body: ExportWorldbookRequest
+  ): Promise<{ success: boolean; error?: string }> {
+    return downloadFile(
+      `/api/worldbooks/${encodeURIComponent(name)}/export`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+  },
+
+  // ── 工作区配置 API ───────────────────────────────────────
+  getConfig(mode: AppMode = 'character'): Promise<ApiResponse<ConfigData>> {
+    return request<ConfigData>(`/api/config?mode=${mode}`);
+  },
+
+  setWorkspace(path: string, mode: AppMode = 'character'): Promise<ApiResponse<ConfigData>> {
     return request<ConfigData>('/api/config/workspace', {
       method: 'POST',
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, mode }),
     });
   },
 
-  resetWorkspace(): Promise<ApiResponse<ConfigData>> {
+  resetWorkspace(mode: AppMode = 'character'): Promise<ApiResponse<ConfigData>> {
     return request<ConfigData>('/api/config/reset-workspace', {
       method: 'POST',
+      body: JSON.stringify({ mode }),
     });
   },
 
-  browseWorkspace(): Promise<ApiResponse<{ canceled?: boolean; selectedPath?: string }>> {
+  browseWorkspace(mode: AppMode = 'character'): Promise<ApiResponse<{ canceled?: boolean; selectedPath?: string }>> {
     return request<{ canceled?: boolean; selectedPath?: string }>('/api/config/browse', {
       method: 'POST',
+      body: JSON.stringify({ mode }),
     });
   },
 };

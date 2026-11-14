@@ -64,9 +64,15 @@ export function useEntries(initialEntries: MergedEntry[]) {
 
   const smartReset = useCallback(() => {
     setEntries((prev) =>
-      prev.map((e) =>
-        selectedIds.has(e.relPath) ? { ...e, lightType: smartLightType(e) } : e
-      )
+      prev.map((e) => {
+        if (!selectedIds.has(e.relPath)) return e;
+        const defaultKey = e.filename.replace(/\.[^/.]+$/, '');
+        return {
+          ...e,
+          lightType: smartLightType(e),
+          triggerKey: e.triggerKey?.trim() ? e.triggerKey : defaultKey,
+        };
+      })
     );
   }, [selectedIds]);
 

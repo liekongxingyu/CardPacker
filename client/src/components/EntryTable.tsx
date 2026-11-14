@@ -30,17 +30,34 @@ function StatusBadge({ entry }: { entry: MergedEntry }) {
       </span>
     );
   }
-  if (entry.isNew) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
-        🆕 新增
-      </span>
-    );
-  }
+
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700">
-      ✓ 正常
-    </span>
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {entry.fileType && (
+        <span
+          className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-tight ${
+            entry.fileType === 'yaml'
+              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+              : entry.fileType === 'xml'
+              ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300'
+              : entry.fileType === 'json'
+              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+        >
+          {entry.fileType}
+        </span>
+      )}
+      {entry.isNew ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+          🆕 新增
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700">
+          ✓ 正常
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -168,8 +185,8 @@ const EntryTable: React.FC<EntryTableProps> = ({
               <th className="w-12 px-2 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
                 #
               </th>
-              <th className="w-24 px-2 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
-                状态
+              <th className="w-28 px-2 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
+                状态/类型
               </th>
               <th className="px-2 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
                 文件相对路径
@@ -191,7 +208,7 @@ const EntryTable: React.FC<EntryTableProps> = ({
                 <td colSpan={7} className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">
                   <div className="flex flex-col items-center gap-2">
                     <span className="text-3xl">📭</span>
-                    <span>该工程文件夹内暂未找到任何 .json 条目文件</span>
+                    <span>该文件夹内暂未找到任何可用的条目文件</span>
                   </div>
                 </td>
               </tr>
@@ -217,7 +234,7 @@ const EntryTable: React.FC<EntryTableProps> = ({
                   <td className="px-2 py-2.5 text-slate-400 dark:text-slate-500 text-xs font-mono">
                     {idx + 1}
                   </td>
-                  {/* Status */}
+                  {/* Status & fileType */}
                   <td className="px-2 py-2.5">
                     <StatusBadge entry={entry} />
                   </td>
@@ -241,9 +258,8 @@ const EntryTable: React.FC<EntryTableProps> = ({
                       onChange={(e) =>
                         onUpdateEntry(entry.relPath, { triggerKey: e.target.value })
                       }
-                      placeholder={entry.lightType === 'constant' ? '常驻无需触发词' : '关键词1, 关键词2…'}
-                      disabled={entry.lightType === 'constant'}
-                      className="w-full bg-slate-50 hover:bg-white focus:bg-white dark:bg-slate-900/80 dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 disabled:bg-slate-100/60 dark:disabled:bg-slate-800/40 disabled:text-slate-400 transition-all font-mono"
+                      placeholder="关键词1, 关键词2…"
+                      className="w-full bg-slate-50 hover:bg-white focus:bg-white dark:bg-slate-900/80 dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all font-mono"
                     />
                   </td>
                   {/* Light type */}

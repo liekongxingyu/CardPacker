@@ -8,25 +8,39 @@ import {
   PositionType,
   MergedEntry,
   ScannedFile,
+  WorldbookSnapshot,
+  WorldbookMeta,
 } from '../types';
 import {
   SNAPSHOTS_DIR,
+  WORLDBOOK_SNAPSHOTS_DIR,
   DEFAULT_CREATOR,
   DEFAULT_VERSION,
 } from '../config';
 
 /** 确保快照目录存在 */
-function ensureSnapshotsDir(): void {
-  if (!fs.existsSync(SNAPSHOTS_DIR)) {
-    fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
+function ensureSnapshotsDir(isWorldbook = false): void {
+  const targetDir = isWorldbook ? WORLDBOOK_SNAPSHOTS_DIR : SNAPSHOTS_DIR;
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
   }
 }
 
 /** 获取指定工程的快照文件路径 */
 function getSnapshotPath(projectName: string): string {
-  ensureSnapshotsDir();
+  ensureSnapshotsDir(false);
   return path.join(SNAPSHOTS_DIR, `${projectName}.json`);
 }
+
+/** 获取指定世界书工程的快照文件路径 */
+function getWorldbookSnapshotPath(projectName: string): string {
+  ensureSnapshotsDir(true);
+  return path.join(WORLDBOOK_SNAPSHOTS_DIR, `${projectName}.json`);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 角色卡快照
+// ─────────────────────────────────────────────────────────────
 
 /** 加载指定工程的快照，若不存在则返回默认空快照 */
 export function loadSnapshot(projectName: string): Snapshot {
@@ -72,7 +86,7 @@ export function saveSnapshot(
     enabled: boolean;
   }>
 ): string {
-  ensureSnapshotsDir();
+  ensureSnapshotsDir(false);
 
   const nowStr = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const snapshotPath = getSnapshotPath(projectName);
@@ -99,12 +113,7 @@ export function saveSnapshot(
 }
 
 /**
- * 将扫描到的实际文件与快照配置进行智能增量合并：
- * - 快照已有的条目：继承历史 triggerKey、lightType、position 等
- * - 新增的文件：
- *   - 路径含「背景/世界观/设定」→ constant（蓝灯）
- *   - 其余 → selective（绿灯），triggerKey 为文件名（不含扩展名）
- * - 废弃的文件（快照有但物理文件已删除）：自动剔除（不出现在结果中）
+ * 将扫描到的实际文件与快照配置进行智能增量合并
  */
 export function mergeWithSnapshot(
   scannedFiles: ScannedFile[],
@@ -134,9 +143,9 @@ export function mergeWithSnapshot(
     let isNew: boolean;
 
     if (relPath in savedEntries) {
-      // 继承快照配置
+      // 继承快照配置（若无有效触发词则回退到文件名默认值）
       const cfg = savedEntries[relPath];
-      triggerKey = cfg.triggerKey ?? baseName;
+      triggerKey = cfg.triggerKey?.trim() ? cfg.triggerKey.trim() : baseName;
       lightType = cfg.lightType ?? 'selective';
       position = cfg.position ?? 'before_char';
       enabled = cfg.enabled ?? true;
@@ -159,6 +168,145 @@ export function mergeWithSnapshot(
       fullPath: file.fullPath,
       isValid: file.isValid,
       errorMsg: file.errorMsg,
+      fileType: file.fileType,
+      triggerKey,
+      lightType,
+      position,
+      enabled,
+      isNew,
+    });
+  }
+
+  return { meta, entries: mergedList };
+}
+
+// ─────────────────────────────────────────────────────────────
+// 世界书快照
+// ─────────────────────────────────────────────────────────────
+
+/** 加载指定世界书工程的快照 */
+export function loadWorldbookSnapshot(projectName: string): WorldbookSnapshot {
+  const snapshotPath = getWorldbookSnapshotPath(projectName);
+
+  if (fs.existsSync(snapshotPath)) {
+    try {
+      const content = fs.readFileSync(snapshotPath, 'utf-8');
+      return JSON.parse(content) as WorldbookSnapshot;
+    } catch (e) {
+      console.warn(`[Warning] Failed to load worldbook snapshot for ${projectName}:`, e);
+    }
+  }
+
+  return {
+    projectName,
+    lastUpdated: null,
+    meta: {
+      name: projectName,
+      description: '',
+      scanDepth: 100,
+      tokenBudget: 2048,
+      recursiveScanning: true,
+    },
+    entries: {},
+  };
+}
+
+/** 保存世界书工程快照 */
+export function saveWorldbookSnapshot(
+  projectName: string,
+  meta: Partial<WorldbookMeta> | undefined,
+  entries: Array<{
+    relPath: string;
+    triggerKey: string;
+    lightType: LightType;
+    position: PositionType;
+    enabled: boolean;
+  }>
+): string {
+  ensureSnapshotsDir(true);
+
+  const nowStr = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const snapshotPath = getWorldbookSnapshotPath(projectName);
+
+  const entriesRecord: Record<string, EntryConfig> = {};
+  for (const entry of entries) {
+    entriesRecord[entry.relPath] = {
+      triggerKey: entry.triggerKey,
+      lightType: entry.lightType,
+      position: entry.position,
+      enabled: entry.enabled,
+    };
+  }
+
+  const existing = loadWorldbookSnapshot(projectName);
+  const snapshot: WorldbookSnapshot = {
+    projectName,
+    lastUpdated: nowStr,
+    meta: {
+      ...existing.meta,
+      ...meta,
+      name: meta?.name || existing.meta.name || projectName,
+    },
+    entries: entriesRecord,
+  };
+
+  fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+  return nowStr;
+}
+
+/** 世界书扫描结果与快照合并 */
+export function mergeWorldbookWithSnapshot(
+  scannedFiles: ScannedFile[],
+  snapshot: WorldbookSnapshot
+): { meta: WorldbookMeta; entries: MergedEntry[] } {
+  const savedMeta = snapshot.meta || {};
+  const meta: WorldbookMeta = {
+    name: savedMeta.name || snapshot.projectName,
+    description: savedMeta.description || '',
+    scanDepth: savedMeta.scanDepth ?? 100,
+    tokenBudget: savedMeta.tokenBudget ?? 2048,
+    recursiveScanning: savedMeta.recursiveScanning ?? true,
+  };
+
+  const savedEntries = snapshot.entries ?? {};
+  const mergedList: MergedEntry[] = [];
+
+  for (const file of scannedFiles) {
+    const { relPath, filename } = file;
+    const baseName = path.basename(filename, path.extname(filename));
+
+    let triggerKey: string;
+    let lightType: LightType;
+    let position: PositionType;
+    let enabled: boolean;
+    let isNew: boolean;
+
+    if (relPath in savedEntries) {
+      // 继承快照配置（若无有效触发词则回退到文件名默认值）
+      const cfg = savedEntries[relPath];
+      triggerKey = cfg.triggerKey?.trim() ? cfg.triggerKey.trim() : baseName;
+      lightType = cfg.lightType ?? 'selective';
+      position = cfg.position ?? 'before_char';
+      enabled = cfg.enabled ?? true;
+      isNew = false;
+    } else {
+      const isBackground = ['背景', '世界观', '设定'].some((kw) =>
+        relPath.includes(kw)
+      );
+      lightType = isBackground ? 'constant' : 'selective';
+      triggerKey = baseName;
+      position = 'before_char';
+      enabled = true;
+      isNew = true;
+    }
+
+    mergedList.push({
+      filename: file.filename,
+      relPath: file.relPath,
+      fullPath: file.fullPath,
+      isValid: file.isValid,
+      errorMsg: file.errorMsg,
+      fileType: file.fileType,
       triggerKey,
       lightType,
       position,

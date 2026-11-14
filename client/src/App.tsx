@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Header from './components/layout/Header';
 import ProjectSelector from './components/ProjectSelector';
 import MetaForm from './components/MetaForm';
+import WorldbookMetaBar from './components/WorldbookMetaBar';
 import EntryTable from './components/EntryTable';
 import ActionBar from './components/ActionBar';
 import WorkspaceModal from './components/WorkspaceModal';
 import { useProject } from './hooks/useProject';
 import { useEntries } from './hooks/useEntries';
 import { api } from './api';
-import type { MergedEntry } from './types';
+import type { MergedEntry, AppMode } from './types';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -46,17 +47,32 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 function App() {
+  // App Mode: character or worldbook
+  const [mode, setMode] = useState<AppMode>(() => {
+    const saved = localStorage.getItem('cardpacker_mode');
+    return saved === 'worldbook' ? 'worldbook' : 'character';
+  });
+
+  const handleModeChange = useCallback((newMode: AppMode) => {
+    setMode(newMode);
+    localStorage.setItem('cardpacker_mode', newMode);
+  }, []);
+
   const {
     projects,
     selectedProject,
     projectDetail,
+    worldbookDetail,
+    currentEntries,
+    snapshotLastUpdated,
     loading,
     error,
     selectProject,
     setMeta,
+    setWorldbookMeta,
     refreshDetail,
     applyNewWorkspaceProjects,
-  } = useProject();
+  } = useProject(mode);
 
   const {
     entries,
@@ -67,10 +83,12 @@ function App() {
     updateEntry,
     batchSetLight,
     smartReset,
-  } = useEntries(projectDetail?.entries ?? []);
+  } = useEntries(currentEntries);
 
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [defaultWorkspaceRoot, setDefaultWorkspaceRoot] = useState('');
+  const [worldbookWorkspaceRoot, setWorldbookWorkspaceRoot] = useState('');
+  const [defaultWorldbookWorkspaceRoot, setDefaultWorldbookWorkspaceRoot] = useState('');
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -107,65 +125,138 @@ function App() {
   }, []);
 
   // Load workspace config
-  useEffect(() => {
-    api.getConfig().then((res) => {
+  const reloadConfig = useCallback(() => {
+    api.getConfig(mode).then((res) => {
       if (res.success && res.data) {
         setWorkspaceRoot(res.data.workspaceRoot);
         setDefaultWorkspaceRoot(res.data.defaultWorkspaceRoot);
+        setWorldbookWorkspaceRoot(res.data.worldbookWorkspaceRoot);
+        setDefaultWorldbookWorkspaceRoot(res.data.defaultWorldbookWorkspaceRoot);
       }
     });
-  }, []);
+  }, [mode]);
+
+  useEffect(() => {
+    reloadConfig();
+  }, [reloadConfig]);
+
+  const activeWorkspaceRoot =
+    mode === 'worldbook' ? worldbookWorkspaceRoot : workspaceRoot;
+  const activeDefaultWorkspaceRoot =
+    mode === 'worldbook' ? defaultWorldbookWorkspaceRoot : defaultWorkspaceRoot;
 
   const handleWorkspaceChanged = useCallback(
     (newPath: string, newProjects: string[]) => {
-      setWorkspaceRoot(newPath);
+      if (mode === 'worldbook') {
+        setWorldbookWorkspaceRoot(newPath);
+      } else {
+        setWorkspaceRoot(newPath);
+      }
       applyNewWorkspaceProjects(newProjects);
     },
-    [applyNewWorkspaceProjects]
+    [mode, applyNewWorkspaceProjects]
   );
 
-  const buildPayload = useCallback(() => {
-    if (!projectDetail) return null;
-    return {
-      meta: projectDetail.meta,
-      entries: entries.map((e) => ({
-        relPath: e.relPath,
-        triggerKey: e.triggerKey,
-        lightType: e.lightType,
-        position: e.position,
-        enabled: e.enabled,
-      })),
-    };
-  }, [projectDetail, entries]);
+  const entriesPayload = useMemo(() => {
+    return entries.map((e) => ({
+      relPath: e.relPath,
+      triggerKey: e.triggerKey,
+      lightType: e.lightType,
+      position: e.position,
+      enabled: e.enabled,
+    }));
+  }, [entries]);
 
   const handleSave = useCallback(async () => {
     if (!selectedProject) return;
-    const payload = buildPayload();
-    if (!payload) return;
     setSaving(true);
-    const res = await api.saveSnapshot(selectedProject, payload);
-    setSaving(false);
-    if (res.success) {
-      pushToast('success', '工程快照已成功保存！');
-      refreshDetail();
+
+    if (mode === 'worldbook') {
+      if (!worldbookDetail) {
+        setSaving(false);
+        return;
+      }
+      const res = await api.saveWorldbook(selectedProject, {
+        meta: worldbookDetail.meta,
+        entries: entriesPayload,
+      });
+      setSaving(false);
+      if (res.success) {
+        pushToast('success', '世界书快照已成功保存！');
+        refreshDetail();
+      } else {
+        pushToast('error', res.error ?? '保存失败');
+      }
     } else {
-      pushToast('error', res.error ?? '保存失败');
+      if (!projectDetail) {
+        setSaving(false);
+        return;
+      }
+      const res = await api.saveSnapshot(selectedProject, {
+        meta: projectDetail.meta,
+        entries: entriesPayload,
+      });
+      setSaving(false);
+      if (res.success) {
+        pushToast('success', '角色卡工程快照已成功保存！');
+        refreshDetail();
+      } else {
+        pushToast('error', res.error ?? '保存失败');
+      }
     }
-  }, [selectedProject, buildPayload, pushToast, refreshDetail]);
+  }, [
+    mode,
+    selectedProject,
+    worldbookDetail,
+    projectDetail,
+    entriesPayload,
+    pushToast,
+    refreshDetail,
+  ]);
 
   const handleExport = useCallback(async () => {
     if (!selectedProject) return;
-    const payload = buildPayload();
-    if (!payload) return;
     setExporting(true);
-    const res = await api.exportCard(selectedProject, payload);
-    setExporting(false);
-    if (res.success) {
-      pushToast('success', '导出成功！已唤起文件下载');
+
+    if (mode === 'worldbook') {
+      if (!worldbookDetail) {
+        setExporting(false);
+        return;
+      }
+      const res = await api.exportWorldbook(selectedProject, {
+        meta: worldbookDetail.meta,
+        entries: entriesPayload,
+      });
+      setExporting(false);
+      if (res.success) {
+        pushToast('success', '导出成功！已唤起世界书 JSON 下载');
+      } else {
+        pushToast('error', res.error ?? '导出失败');
+      }
     } else {
-      pushToast('error', res.error ?? '导出失败');
+      if (!projectDetail) {
+        setExporting(false);
+        return;
+      }
+      const res = await api.exportCard(selectedProject, {
+        meta: projectDetail.meta,
+        entries: entriesPayload,
+      });
+      setExporting(false);
+      if (res.success) {
+        pushToast('success', '导出成功！已唤起角色卡文件下载');
+      } else {
+        pushToast('error', res.error ?? '导出失败');
+      }
     }
-  }, [selectedProject, buildPayload, pushToast]);
+  }, [
+    mode,
+    selectedProject,
+    worldbookDetail,
+    projectDetail,
+    entriesPayload,
+    pushToast,
+  ]);
 
   const handleEntriesChange = useCallback(
     (_updated: MergedEntry[]) => {
@@ -175,13 +266,17 @@ function App() {
   );
 
   const enabledCount = entries.filter((e) => e.enabled).length;
+  const isWorldbook = mode === 'worldbook';
+  const hasActiveDetail = isWorldbook ? !!worldbookDetail : !!projectDetail;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors">
       <ToastContainer toasts={toasts} />
 
       <Header
-        workspaceRoot={workspaceRoot}
+        mode={mode}
+        onModeChange={handleModeChange}
+        workspaceRoot={activeWorkspaceRoot}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
@@ -190,10 +285,11 @@ function App() {
       <WorkspaceModal
         isOpen={isWorkspaceModalOpen}
         onClose={() => setIsWorkspaceModalOpen(false)}
-        currentPath={workspaceRoot}
-        defaultPath={defaultWorkspaceRoot}
+        currentPath={activeWorkspaceRoot}
+        defaultPath={activeDefaultWorkspaceRoot}
         onWorkspaceChanged={handleWorkspaceChanged}
         onNotify={pushToast}
+        mode={mode}
       />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 pb-28 space-y-4.5">
@@ -203,8 +299,9 @@ function App() {
           selected={selectedProject}
           onChange={selectProject}
           loading={loading}
-          snapshotLastUpdated={projectDetail?.snapshotLastUpdated ?? null}
+          snapshotLastUpdated={snapshotLastUpdated}
           onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
+          mode={mode}
         />
 
         {/* Error state */}
@@ -224,7 +321,7 @@ function App() {
         )}
 
         {/* Loading skeleton */}
-        {loading && !projectDetail && (
+        {loading && !hasActiveDetail && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 animate-pulse space-y-4">
             <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded w-1/4" />
             <div className="h-36 bg-slate-100 dark:bg-slate-800/60 rounded-xl" />
@@ -232,9 +329,19 @@ function App() {
         )}
 
         {/* Main content when project is loaded */}
-        {projectDetail && (
+        {hasActiveDetail && (
           <>
-            <MetaForm meta={projectDetail.meta} onChange={setMeta} />
+            {/* In Character mode: show MetaForm. In Worldbook mode: show minimal WorldbookMetaBar (no character description) */}
+            {!isWorldbook && projectDetail && (
+              <MetaForm meta={projectDetail.meta} onChange={setMeta} />
+            )}
+
+            {isWorldbook && worldbookDetail && (
+              <WorldbookMetaBar
+                meta={worldbookDetail.meta}
+                onChange={setWorldbookMeta}
+              />
+            )}
 
             <EntryTable
               entries={entries}
@@ -253,18 +360,26 @@ function App() {
         {/* Empty state: No projects in folder */}
         {!loading && !error && projects.length === 0 && (
           <div className="text-center py-20 bg-white dark:bg-slate-900/60 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-8 space-y-4 shadow-xs">
-            <div className="text-5xl">📁</div>
+            <div className="text-5xl">{isWorldbook ? '📖' : '📁'}</div>
             <div>
               <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                当前扫描目录下未发现工程文件夹
+                当前扫描目录下未发现{isWorldbook ? '世界书' : '工程'}文件夹
               </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                当前扫描路径为 <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs">{workspaceRoot}</code>，该目录下暂无符合条件的角色卡工程。
+                当前扫描路径为{' '}
+                <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs">
+                  {activeWorkspaceRoot}
+                </code>
+                ，该目录下暂无符合条件的{isWorldbook ? '世界书' : '角色卡'}文件夹。
               </p>
             </div>
             <button
               onClick={() => setIsWorkspaceModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 shadow-md shadow-violet-500/25 transition-all cursor-pointer"
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-md transition-all cursor-pointer ${
+                isWorldbook
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
+                  : 'bg-violet-600 hover:bg-violet-700 shadow-violet-500/25'
+              }`}
             >
               📂 更改或选择扫描文件夹
             </button>
@@ -272,11 +387,11 @@ function App() {
         )}
 
         {/* Empty state: Has projects, but none selected */}
-        {!loading && !error && !projectDetail && projects.length > 0 && !selectedProject && (
+        {!loading && !error && !hasActiveDetail && projects.length > 0 && !selectedProject && (
           <div className="text-center py-24 text-slate-400 dark:text-slate-500">
-            <p className="text-5xl mb-3">📂</p>
+            <p className="text-5xl mb-3">{isWorldbook ? '📖' : '📂'}</p>
             <p className="text-base font-medium text-slate-600 dark:text-slate-300">
-              请在上方选择一个工程以开始编辑与打包
+              请在上方选择一个{isWorldbook ? '世界书' : '工程'}以开始编辑与打包
             </p>
           </div>
         )}
@@ -289,6 +404,7 @@ function App() {
         onExport={handleExport}
         saving={saving}
         exporting={exporting}
+        mode={mode}
       />
     </div>
   );

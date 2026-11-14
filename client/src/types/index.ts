@@ -1,5 +1,6 @@
 export type LightType = 'constant' | 'selective';
 export type PositionType = 'before_char' | 'after_char' | 'description';
+export type AppMode = 'character' | 'worldbook';
 
 export interface ScannedFile {
   filename: string;
@@ -7,6 +8,7 @@ export interface ScannedFile {
   fullPath: string;
   isValid: boolean;
   errorMsg: string | null;
+  fileType?: 'json' | 'yaml' | 'xml' | 'text';
 }
 
 export interface EntryConfig {
@@ -29,9 +31,24 @@ export interface CardMeta {
   characterVersion: string;
 }
 
+export interface WorldbookMeta {
+  name: string;
+  description: string;
+  scanDepth?: number;
+  tokenBudget?: number;
+  recursiveScanning?: boolean;
+}
+
 export interface ProjectDetail {
   name: string;
   meta: CardMeta;
+  entries: MergedEntry[];
+  snapshotLastUpdated: string | null;
+}
+
+export interface WorldbookDetail {
+  name: string;
+  meta: WorldbookMeta;
   entries: MergedEntry[];
   snapshotLastUpdated: string | null;
 }
@@ -49,9 +66,24 @@ export interface SaveSnapshotRequest {
 
 export type ExportCardRequest = SaveSnapshotRequest;
 
+export interface SaveWorldbookRequest {
+  meta?: Partial<WorldbookMeta>;
+  entries: Array<{
+    relPath: string;
+    triggerKey: string;
+    lightType: LightType;
+    position: PositionType;
+    enabled: boolean;
+  }>;
+}
+
+export type ExportWorldbookRequest = SaveWorldbookRequest;
+
 export interface ConfigData {
   workspaceRoot: string;
   defaultWorkspaceRoot: string;
+  worldbookWorkspaceRoot: string;
+  defaultWorldbookWorkspaceRoot: string;
   exists: boolean;
   projects: string[];
 }

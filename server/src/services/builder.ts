@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { CardMeta, MergedEntry } from '../types';
+import { CardMeta, MergedEntry, WorldbookMeta } from '../types';
 import { POS_MAP } from '../config';
 
 /**
@@ -34,33 +34,37 @@ export function buildTavernV3Card(
     // 跳过禁用的或无效的条目
     if (!config.enabled || !config.isValid) continue;
 
-    // 读取 JSON 文件内容
-    let dataObj: unknown;
+    // 读取文件内容
+    let contentStr = '';
     try {
       const raw = fs.readFileSync(config.fullPath, 'utf-8');
-      dataObj = JSON.parse(raw);
+      if (config.filename.endsWith('.json')) {
+        try {
+          const dataObj = JSON.parse(raw);
+          contentStr = JSON.stringify(dataObj, null, 2);
+        } catch {
+          contentStr = raw;
+        }
+      } else {
+        contentStr = raw;
+      }
     } catch (e) {
       console.warn(`[Warning] Cannot read entry file ${config.fullPath}:`, e);
       continue;
     }
 
-    const contentStr = JSON.stringify(dataObj, null, 2);
     const isConstant = config.lightType === 'constant';
     const extPos = POS_MAP[config.position] ?? 0;
 
-    // 触发词按逗号拆分成列表；constant 条目触发词为空数组
-    const triggerKeyRaw = config.triggerKey || '';
-    let keysList: string[];
-    if (isConstant) {
-      keysList = [];
-    } else {
-      keysList = triggerKeyRaw
-        .split(/[,，]+/)
-        .map((k) => k.trim())
-        .filter(Boolean);
-      if (keysList.length === 0 && triggerKeyRaw.trim()) {
-        keysList = [triggerKeyRaw.trim()];
-      }
+    // 触发词按中英文逗号拆分成列表：不管是蓝灯还是绿灯均保留默认触发词
+    const baseName = path.basename(config.filename, path.extname(config.filename));
+    const triggerKeyRaw = config.triggerKey?.trim() ? config.triggerKey.trim() : baseName;
+    let keysList: string[] = triggerKeyRaw
+      .split(/[,，]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keysList.length === 0) {
+      keysList = [baseName];
     }
 
     const entryDict: Record<string, unknown> = {
@@ -170,17 +174,133 @@ export function buildTavernV3Card(
 }
 
 /**
- * 将卡片数据写入 {outputDir}/{cardName}_Card_V3.json
- * @returns 写入的绝对路径
+ * 根据条目配置直接组装符合 SillyTavern 规范的独立世界书（Lorebook/World Info）对象
+ * 没有角色卡相关的设定/开场白描述
  */
-export function exportCardToFile(
-  outputDir: string,
-  cardData: Record<string, unknown>
-): string {
-  const cardName = (cardData['name'] as string | undefined) || 'Card';
-  const outputFilename = `${cardName}_Card_V3.json`;
-  const outputPath = path.join(outputDir, outputFilename);
+export function buildWorldbook(
+  meta: WorldbookMeta,
+  entriesConfig: MergedEntry[]
+): Record<string, unknown> {
+  const worldbookName = meta.name || 'Unnamed_Worldbook';
+  const description = meta.description || '';
 
-  fs.writeFileSync(outputPath, JSON.stringify(cardData, null, 4), 'utf-8');
-  return outputPath;
+  const entriesDict: Record<string, Record<string, unknown>> = {};
+  let entryIdx = 0;
+
+  for (const config of entriesConfig) {
+    if (!config.enabled || !config.isValid) continue;
+
+    let contentStr = '';
+    try {
+      const raw = fs.readFileSync(config.fullPath, 'utf-8');
+      if (config.filename.endsWith('.json')) {
+        try {
+          const dataObj = JSON.parse(raw);
+          contentStr = JSON.stringify(dataObj, null, 2);
+        } catch {
+          contentStr = raw;
+        }
+      } else {
+        // yaml, xml, text 直接读取内容组装
+        contentStr = raw;
+      }
+    } catch (e) {
+      console.warn(`[Warning] Cannot read entry file ${config.fullPath}:`, e);
+      continue;
+    }
+
+    const isConstant = config.lightType === 'constant';
+    const extPos = POS_MAP[config.position] ?? 0;
+
+    // 触发词按中英文逗号拆分成列表：不管是蓝灯还是绿灯均保留默认触发词
+    const baseName = path.basename(config.filename, path.extname(config.filename));
+    const triggerKeyRaw = config.triggerKey?.trim() ? config.triggerKey.trim() : baseName;
+    let keysList: string[] = triggerKeyRaw
+      .split(/[,，]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keysList.length === 0) {
+      keysList = [baseName];
+    }
+
+    const entryObj: Record<string, unknown> = {
+      uid: entryIdx,
+      id: entryIdx,
+      key: keysList,
+      keys: keysList,
+      keysecondary: [],
+      secondary_keys: [],
+      comment: triggerKeyRaw || path.basename(config.filename, path.extname(config.filename)),
+      content: contentStr,
+      constant: isConstant,
+      vectorized: false,
+      selective: !isConstant,
+      selectiveLogic: 0,
+      addMemo: true,
+      order: 100,
+      insertion_order: 100,
+      position: extPos,
+      disable: false,
+      enabled: true,
+      use_regex: false,
+      excludeRecursion: true,
+      preventRecursion: true,
+      delayUntilRecursion: false,
+      probability: 100,
+      useProbability: true,
+      depth: 4,
+      group: '',
+      groupOverride: false,
+      groupWeight: 100,
+      scanDepth: null,
+      caseSensitive: null,
+      matchWholeWords: null,
+      useGroupScoring: false,
+      automationId: '',
+      role: 0,
+      sticky: 0,
+      cooldown: 0,
+      delay: 0,
+      displayIndex: entryIdx,
+      extensions: {
+        position: extPos,
+        exclude_recursion: true,
+        prevent_recursion: true,
+        delay_until_recursion: false,
+        display_index: entryIdx,
+        probability: 100,
+        useProbability: true,
+        depth: 4,
+        selectiveLogic: 0,
+        group: '',
+        group_override: false,
+        group_weight: 100,
+        scan_depth: null,
+        match_whole_words: null,
+        use_group_scoring: false,
+        case_sensitive: null,
+        automation_id: '',
+        role: 0,
+        vectorized: false,
+        sticky: 0,
+        cooldown: 0,
+        delay: 0,
+      },
+    };
+
+    entriesDict[String(entryIdx)] = entryObj;
+    entryIdx++;
+  }
+
+  const worldbookData: Record<string, unknown> = {
+    name: worldbookName,
+    description,
+    scan_depth: meta.scanDepth ?? 100,
+    token_budget: meta.tokenBudget ?? 2048,
+    recursive_scanning: meta.recursiveScanning ?? true,
+    extensions: {},
+    entries: entriesDict,
+  };
+
+  return worldbookData;
 }
